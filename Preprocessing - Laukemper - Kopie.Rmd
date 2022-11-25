@@ -222,17 +222,10 @@ rm(drop_par)
 
 ```{r}
 
-###remove empty paragraphs
-mp1 <- mp
-
-mp1$Paragraph <- stri_trim(mp$Paragraph)
-
 ##remove paragraphs with less than three words
-mp1 <- mp1 %>% filter(nchar(Paragraph) > 2)
+mp <- mp[grepl('\\w*\\s\\w*\\s\\w*',mp$Paragraph),]
 
-
-
-
+##split year variable
 
 ```
 
