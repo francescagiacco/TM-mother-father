@@ -11,331 +11,105 @@ knitr::opts_chunk$set(echo = TRUE)
 ##### Header
 ```{r}
 # rm(list=ls()) #empty environment
-
 ##load libraries
 library(LexisNexisTools)
 library(tidyverse)
 library(stringi)
-
-# library(quanteda)
-# library(quanteda.textplots)
-# library(quanteda.textstats)
-#library(stringr)
-#library(rlang)
-# library(stringi)
 ```
 
-#####Import the Indian and British newspaper corpi (as LNT files)
 
-###Turn word documents into RData object + remove English language article+ get inital number of docs downloaded per newspaper
+```{r Import articles}
+##import articles
+dir("../Data-TAD") #identify where data is saved
+data <- lnt_read("../Data-TAD") #individual
+length(unique(data@meta$ID)) #4800 documents
 
-
-TO-DO
--> check Guardian: complete? doubles? Was there something wrong? e.g. duplicated not activated
-    WAS THERE AN ISSUE WITH 2022 data? duplicates not grouped? check data collection notes
-    - when I unzipped - I did not automatically replace files of same name - how for others? - won't have same info on how many duplicates there are
-    - guardian: minimal and max article length
-    - some rtf files were in folder - if issues arise later on - see if this is the source of error
-    -> does not work with RTF files
-    
-    - What about the Observer - Sunday version of the Guardian?
-  - Are tIMES AND sUNDAY tIMES same publication?
-  - remove numbers, yes or no? YES!
-  - make sure that for all newspapers I ticked both electronic and non-electronic
-    
-    
-    
--> second newspaper: The Telegraph available? Now I have selected the Times?
-Complete? Duplicates activated?
--> TOI + Hindu: Up to date? Most recent articles 2022 - How long is the observational period?
-
-
-```{r}
-# ####INDIA
-# ##import Times of India articles
-# dir()
-# TOI_1 <- lnt_read("../Data/Final/TOI_2018-2023") #4902 files
-# length(unique(TOI_1@meta$ID)) #keep only English language: 4852
-# 
-# save(TOI_1, file = "../Data/Final/TOI_1.RData") #save LNToutput
-# 
-# ##Import Hindu articles
-# HINDU_1 <- lnt_read("../Data/Final/TheHindu_2018-2023") #706 files
-# length(unique(HINDU_1@meta$ID)) #keep only English language: 700 files
-# 
-# save(HINDU_1, file = "../Data/Final/HINDU_1.RData") #save LNToutput
-# 
-# #Hindu does not have sections or author names
-
-# ####UK
-# ##Import Guardian articles (not the final data - check)
-library(striprtf) #some guardian docs in rtf rather than word format
-GUARDIAN_1 <- lnt_read("../Data/Final/Guardian_2022_unzipped") # 9963
-length(unique(GUARDIAN_1@meta$ID)) #keep only English language:  files
-# 
-# save(GUARDIAN_1, file = "../Data/Final/GUARDIAN_1.RData") #save LNToutput
-
-# ##Import Times articles
-# TIMES_1 <- lnt_read("../Data/Final/The_Times_all_June") #
-# length(unique(TIMES_1@meta$ID)) #keep only English language: 3296 files
-# 
-# save(TIMES_1, file = "../Data/Final/TIMES_1.RData") #save LNToutput
+save(data, file = "data.RData") #save LNToutput
 
 ```
 
 ###Load Corpi
 ```{r}
-# load(file = "../Data/Final/TOI_1.RData")
-# load(file = "../Data/Final/HINDU_1.RData")
-# load(file = "../Data/Final/GUARDIAN_1.RData")
-# load(file = "../Data/Final/TIMES_1.RData")
+load(file = "data.RData")
 ```
 
-###---------------------------Clean the Corpi
+###---------------------------Remove direct duplicates
 
-## Remove Doclists
-Some of the Corpi still include doclists (lists of articles included in the corpus rather than actual articles) (commented)
+```{r check for missing dates & rm direct duplicates}
+nrow(is.na(data@meta$Date)) #check that there are no missing dates
+data[duplicated(data@articles$Article), ] #check if there are direct duplicates (there are 52)
+data <- data[!duplicated(data@articles$Article), ] #remove direct duplicates
+```
+
+
+###----------------------------Remove indirect duplicates
+
+Why did I get there error meassage: You supplied NA values to dates, when actually no NAs
+
+We manually compared the texts of potential duplicates with varius similarity scores. In the end, we decided on a cut-off of 0.95.
 
 ```{r}
-# TOI_1 <- TOI_1[!grepl("doclist", TOI_1@meta$Source_File),] #drop doclists
-# length(unique(TOI_1@meta$ID)) #4851 (1 doclist)
-# 
-# HINDU_1 <- HINDU_1[!grepl("doclist", HINDU_1@meta$Source_File),] #drop doclists
-# length(unique(HINDU_1@meta$ID)) #699 (1 doclist)
-# 
-# GUARDIAN_1 <- GUARDIAN_1[!grepl("doclist", GUARDIAN_1@meta$Source_File),] #drop doclists
-# length(unique(GUARDIAN_1@meta$ID)) #X (X doclist)
-# 
-# TIMES_1 <- TIMES_1[!grepl("doclist", TIMES_1@meta$Source_File),] #drop doclists
-# length(unique(TIMES_1@meta$ID)) #X (X doclist)
-# ```
-# 
-# ###----------------------REMOVE ARTICLES WITH MISSING DATES
-# 
-# ```{r}
-# ##TOI
-# sum(is.na(TOI_1@meta$Date)) #32 missing dates will be removed
-# TOI_1 <- TOI_1[!is.na(TOI_1@meta$Date),] #drop articles with missing dates
-# length(unique(TOI_1@meta$ID)) #4819
-# #4851-4819 #32 missing dates
-# 
-# ##HINDU
-# sum(is.na(HINDU_1@meta$Date)) #5 articles with missing dates will be removed
-# HINDU_1 <- HINDU_1[!is.na(HINDU_1@meta$Date),] #drop articles with missing dates
-# length(unique(HINDU_1@meta$ID)) #694 articles
-# 
-# ##GUARDIAN
-# sum(is.na(GUARDIAN_1@meta$Date)) #X article with missing dates will be removed
-# GUARDIAN_1 <- GUARDIAN_1[!is.na(GUARDIAN_1@meta$Date),] #drop articles with missing dates
-# length(unique(GUARDIAN_1@meta$ID)) #X articles
-# 
-# ##TIMES
-# sum(is.na(TIMES_1@meta$Date)) #X articles with missing dates will be removed
-# TIMES_1 <- TIMES_1[!is.na(TIMES_1@meta$Date),] #drop articles with missing dates
-# length(unique(TIMES_1@meta$ID)) #4630 articles
-# ```
+nrow(is.na(data@meta$Date))
+##calculate distance (takes several minutes) - converts into dtm, compares articles published on same day, and calculates overlap
+duplicates_data <- lnt_similarity(LNToutput =  data, #this is the same as similarity measure from quanteda, if rel-dist = off
+                                      threshold = 0.95,
+                                      rel_dist = F) #no Levenstein distance calculated - much faster
+
+
+#validate
+head(duplicates_data[order(duplicates_data$Similarity), ], n = 1)
+duplicates_data[11]
 ```
-
-
-```{r}
-# ###-----------------------REMOVE DIRECT DUPLICATES
-# 
-# ```{r}
-# ##filter out direct duplicates; 100% same text
-# #TOI
-# length(TOI_1@articles$ID) #4819
-# TOI_1 <- TOI_1[!duplicated(TOI_1@articles$Article), ] #drop duplicates
-# length(TOI_1@articles$ID) #4485 after direct duplicates removed
-# #4819-4485 #334 direct duplicates removed
-# 
-# #HINDU
-# length(HINDU_1@articles$ID) #694
-# HINDU_1 <- HINDU_1[!duplicated(HINDU_1@articles$Article), ]
-# length(HINDU_1@articles$ID) #685 after direct duplicates removed
-# #694-685 #9 direct duplicates removed
-# 
-# #GUARDIAN
-# length(GUARDIAN_1@articles$ID) #296
-# GUARDIAN_1 <- GUARDIAN_1[!duplicated(GUARDIAN_1@articles$Article), ]
-# length(GUARDIAN_1@articles$ID) #296 after direct duplicates removed
-# #296-296 #0 direct duplicates removed
-# 
-# #TIMES
-# length(TIMES_1@articles$ID) #463
-# TIMES_1 <- TIMES_1[!duplicated(TIMES_1@articles$Article), ]
-# length(TIMES_1@articles$ID) #4625 after direct duplicates removed
-# #4630-4625 #5 direct duplicates removed
-```
-
-
-####--------------------Remove indirect duplicates
-###Identify Indirect duplicates
-```{r}
-# #maybe I should have handled formating issues before, e.g removing x78 etc?
-# #maybe classifier should also be removed before making this comparison?
-# 
-# #######TOI
-# ##calculate distance (takes several minutes) - converts into dtm, compares articles published on same day, and calculates overlap
-# duplicates_TOI_0.95 <- lnt_similarity(LNToutput =  TOI_1, #this is the same as similarity measure from quanteda, if rel-dist = off
-#                                      threshold = 0.95,
-#                                      rel_dist = F) #no Levenstein distance calculated - much faster
-# #0.8 = 898 duplicates found
-# #0.9 = 768 duplicates found -> scheinen immer noch alles duplicates zu sein
-# #0.95 = 637 duplicates found
-# #0.97 = 500 duplicates found
-# 
-# #validate
-# head(duplicates_TOI_0.95[order(duplicates_TOI_0.95$Similarity), ], n = 1)
-# ##0.8 : last text def not the same text
-# ##0.9 : Second text at least double in length then first text -> first text only consisting of a minister's quote
-# ##0.95: Best - longer text; limit: unclear when text starts to truly be a new text - second paragraph added to original one paragraph text etc
-# 
-# #######HINDU
-# ##calculate distance (takes several minutes) - converts into dtm, compares articles published on same day, and calculates overlap
-# duplicates_HINDU_0.95 <- lnt_similarity(LNToutput =  HINDU_1,
-#                                      threshold = 0.95,
-#                                      rel_dist = F) #no Levenstein distance 
-# #0.9 = 20 duplicates found
-# #0.95 = 17 duplicates found
-# #0.97 = 16 duplicates found
-# 
-# #######GUARDIAN
-# ##calculate distance (takes several minutes) - converts into dtm, compares articles published on same day, and calculates overlap
-# duplicates_GUARDIAN_0.95 <- lnt_similarity(LNToutput =  GUARDIAN_1, #this is the same as similarity measure from quanteda, if rel-dist = off
-#                                         threshold = 0.95,
-#                                         rel_dist = F) #no Levenstein distance calculated - much faster
-# #0.9 = 1 duplicates found
-# #0.95 = 0 duplicates found
-# #0.97 = 0 duplicates found
-# 
-# #####TIMES
-# duplicates_TIMES_0.95 <- lnt_similarity(LNToutput =  TIMES_1,
-#                                           threshold = 0.95,
-#                                           rel_dist = F) #no Levenstein distance 
-# head(duplicates_TIMES_0.95[order(duplicates_TIMES_0.95$Similarity), ], n = 1) #validate
-# ```
-
-```
-
 
 ###REMOVE INDIRECT DUPLICATES (COMMENTED OUT)
 ```{r}
-# ##TOI
-# a <- length(unique(TOI_1@articles$Article)) #4485 before duplicate removal
-# a
-# 
-# TOI <- TOI_1[!TOI_1@meta$ID %in% duplicates_TOI_0.95$ID_duplicate, ] #remove duplicates
-# 
-# b <- length(unique(TOI@articles$Article)) #3848 after duplicate removal
-# b
-# 
-# print(a-b) #637 duplicates removed
-# 
-# ##HINDU
-# c <- length(unique(HINDU_1@articles$Article)) #685 before duplicate removal
-# c #685
-# HINDU <- HINDU_1[!HINDU_1@meta$ID %in% duplicates_HINDU_0.95$ID_duplicate, ] #rm duplicates
-# d <-length(unique(HINDU@articles$Article)) #668 after removal
-# d
-# print(c-d) #17 duplicates removed
-# 
-# ##GUARDIAN
-# e <- length(unique(GUARDIAN_1@articles$Article)) #65
-# e
-# GUARDIAN <- GUARDIAN_1[!GUARDIAN_1@meta$ID %in% duplicates_GUARDIAN_0.95$ID_duplicate, ] 
-# f <- length(unique(GUARDIAN@articles$Article)) #296
-# f #65
-# print(e-f) #0 duplicates removed
-# 
-# ##TIMES
-# g <- length(unique(TIMES_1@articles$Article)) #3249
-# g
-# TIMES <- TIMES_1[!TIMES_1@meta$ID %in% duplicates_TIMES_0.95$ID_duplicate, ]
-# h <- length(unique(TIMES@articles$Article)) #2161
-# h
-# print(g-h)#1068 duplicates removed
-
+data <- data[!data@meta$ID %in% duplicates_data$ID_duplicate, ] #remove duplicates
+nrow(data) #4617 articles left
+head(data@meta)
 ```
 ###SAVE Dup removed data
 ```{r}
-# save(TOI, file = "../Data/Final/TOI_dup_rm.RData") #save LNToutput
-# save(HINDU, file = "../Data/Final/HINDU_dup_rm.RData") #save LNToutput
-# save(GUARDIAN, file = "../Data/Final/GUARDIAN_dup_rm.RData") #save LNToutput
-# save(TIMES, file = "../Data/Final/TIMES_dup_rm.RData") #save LNToutput
+save(data, file = "data.RData") #save LNToutput
 ```
 
 
 ```{r}
-# load(file = "../Data/Final/TOI_dup_rm.RData")
-# load(file = "../Data/Final/HINDU_dup_rm.RData")
-# load(file = "../Data/Final/GUARDIAN_dup_rm.RData")
-# load(file = "../Data/Final/TIMES_dup_rm.RData")
+load(file = "data.RData")
 ```
 
 
 ##-----------------------TURN INTO META_Para and META_article dfs
 ```{r}
-# #work with paragrahps: later collapse into text?
-# ###TOI
-# meta_articles_TOI <- lnt_convert(TOI, to = "data.frame") #keep only one df including meta data and text data
-# meta_paragraphs_TOI <- lnt_convert(TOI, to = "data.frame", what = "Paragraphs") #or keep the paragraphs
-# 
-# ###HINDU
-# meta_articles_HINDU <- lnt_convert(HINDU, to = "data.frame")
-# meta_paragraphs_HINDU <- lnt_convert(HINDU, to = "data.frame", what = "Paragraphs")
-# 
-# ###GUARDIAN
-# meta_articles_GUARDIAN <- lnt_convert(GUARDIAN, to = "data.frame")
-# meta_paragraphs_GUARDIAN <- lnt_convert(GUARDIAN, to = "data.frame", what = "Paragraphs")
-# 
-# ###TIMES
-# meta_articles_TIMES <- lnt_convert(TIMES, to = "data.frame")
-# meta_paragraphs_TIMES <- lnt_convert(TIMES, to = "data.frame", what = "Paragraphs")
-# 
-# # Save multiple objects
-# save(meta_articles_TOI, meta_paragraphs_TOI, meta_articles_HINDU, meta_paragraphs_HINDU, meta_articles_GUARDIAN, meta_paragraphs_GUARDIAN, meta_articles_TIMES, meta_paragraphs_TIMES, file = "../Data/Final/dfs_analysis.RData")
+data@meta[8,] 
+data@meta[data@meta$Newspaper == "May 4, 2012",] #Times London
 
-# To load the data again
-load("../Data/Final/dfs_analysis.RData")
+data@meta[data@meta$Newspaper == "March 20, 2009", ] #Times London, Times London, Times London
+
+
+dates <- unique(data@meta$Date)
+unique(data@meta$Newspaper)
+
+meta_articles <- lnt_convert(data, to = "data.frame") #keep only one df 
+meta_paragraphs <- lnt_convert(data, to = "data.frame", what = "Paragraphs")
 ```
+
 
 ##----------------turn paragraphs into single dataframe
-
 ```{r}
 ###update ID variables
+head(meta_paragraphs)
+names(meta_paragraphs)
+unique(meta_paragraphs$Newspaper)
 
-head(meta_paragraphs_TOI) #TOI seems to have articles starting with non-relevant words, e.g. location names
-names(meta_paragraphs_TOI)
-head(meta_paragraphs_HINDU)
+#new ID
+meta_paragraphs$Art_ID <- with(meta_paragraphs, paste0(Art_ID, Newspaper, Headline, Date)) #new ID
 
-#TOI
-meta_paragraphs_TOI$Art_ID <- with(meta_paragraphs_TOI, paste0(Art_ID, Newspaper, Headline, Date)) #new ID
-
-#HINDU
-meta_paragraphs_HINDU$Art_ID <- with(meta_paragraphs_HINDU, paste0(Art_ID, Newspaper, Headline, Date))
-
-#GUARDIAN
-meta_paragraphs_GUARDIAN$Art_ID <- with(meta_paragraphs_GUARDIAN, paste0(Art_ID, Newspaper, Headline, Date))
-
-#TIMES
-meta_paragraphs_TIMES$Art_ID <- with(meta_paragraphs_TIMES, paste0(Art_ID, Newspaper, Headline, Date))
-
-#turn into a single dataframe
-data <- bind_rows(meta_paragraphs_TOI, meta_paragraphs_HINDU, meta_paragraphs_GUARDIAN, meta_paragraphs_TIMES)
-
-#remove paragraph dfs
-rm(meta_paragraphs_TOI, meta_paragraphs_HINDU, meta_paragraphs_GUARDIAN, meta_paragraphs_TIMES)
-rm(meta_articles_TOI, meta_articles_HINDU, meta_articles_GUARDIAN, meta_articles_TIMES)
+data <- meta_paragraphs
 ```
-
 
 ##-------------------add missing variables
 ```{r}
-##harmonize newspaper variable
-data$Newspaper_edition <- data$Newspaper #keep info on edition in new column
-
 unique(data$Newspaper)
-unique(data$Newspaper_edition)
 
 #harmonize times of india
 data$Newspaper[data$Newspaper %in% c("The Guardian(London)", "The Guardian (London)")] <- "The Guardian"
