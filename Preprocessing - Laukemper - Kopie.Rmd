@@ -86,135 +86,162 @@ data@meta[data@meta$Newspaper == "May 4, 2012",] #Times London
 data@meta[data@meta$Newspaper == "March 20, 2009", ] #Times London, Times London, Times London
 
 
+
+
 dates <- unique(data@meta$Date)
 unique(data@meta$Newspaper)
 
-meta_articles <- lnt_convert(data, to = "data.frame") #keep only one df 
-meta_paragraphs <- lnt_convert(data, to = "data.frame", what = "Paragraphs")
+
 ```
+```{r correct Newspaper}
+library(tidyverse)
+data@meta <- data@meta %>%
+    mutate(Newspaper = recode(Newspaper,
+"The Guardian(London)" = "The Guardian",            
+"The Times (London)" = "The Times",          
+"Daily Mail (London)" = "Daily Mail",
+"The Guardian (London)" = "The Guardian",
+"Guardian.com" = "The Guardian",                        
+"DAILY MAIL (London)" = "Daily Mail",              
+"The Guardian (London) - Final Edition" = "The Guardian",
+"May 4, 2012" = "The Times",          
+"The Guardian - Final Edition" = "The Guardian",
+"Mail on Sunday (London)" = "Daily Mail",              
+"MAIL ON SUNDAY (London)" = "Daily Mail",
+"March 20, 2009" = "The Times",          
+"MAIL ON SUNDAY" = "Daily Mail",                 
+"March 27, 2009" = "The Times",                     
+"Guardian.com." = "The Times",                       
+"June 21, 2011" = "The Times",                       
+"March 26, 2009"= "The Times",                       
+"March 25, 2009" = "The Times",                      
+"May 22, 2012" = "The Times",                        
+"February 13, 2009" = "The Times",                 
+"February 17, 2009" = "The Times",                   
+"March 5, 2009" = "The Times",                       
+"March 18, 2009" = "The Times",                       
+"January 21, 2009" = "The Times",                     
+"March 13, 2009" = "The Times",                       
+"March 20, 2012" = "The Times",                       
+"March 24, 2009" = "The Times",                      
+"March 9, 2009" = "The Times",                        
+"March 15, 2009" = "The Times",                       
+"February 12, 2009" = "The Times",                    
+"March 22, 2009"= "The Times",                  
+"February 18, 2009" = "The Times",                    
+"March 21, 2009" = "The Times",                      
+"March 15, 2012" = "The Times",                      
+"March 16, 2009" = "The Times",                       
+"March 17, 2012" = "The Times",                       
+"September 9, 2010" = "The Times",                    
+"March 8, 2009" = "The Times",                       
+"May 25, 2012" = "The Times",
+"September 11, 2010" = "The Times",                   
+"February 5, 2009" = "The Times",                     
+"February 16, 2009" = "The Times",                    
+"March 4, 2009" = "The Times",                        
+"March 14, 2009" = "The Times",                       
+"March 19, 2009" = "The Times",                       
+"October 13, 2010" = "The Times",                     
+"April 6, 2009" = "The Times"))
 
-
-##----------------turn paragraphs into single dataframe
-```{r}
-###update ID variables
-head(meta_paragraphs)
-names(meta_paragraphs)
-unique(meta_paragraphs$Newspaper)
-
-#new ID
-meta_paragraphs$Art_ID <- with(meta_paragraphs, paste0(Art_ID, Newspaper, Headline, Date)) #new ID
-
-data <- meta_paragraphs
+unique(data@meta$Newspaper)
 ```
-
 ##-------------------add missing variables
 ```{r}
-unique(data$Newspaper)
-
-#harmonize times of india
-data$Newspaper[data$Newspaper %in% c("The Guardian(London)", "The Guardian (London)")] <- "The Guardian"
-
-#harmonize Guardian
-data$Newspaper[data$Newspaper %in% c("Times of India (Electronic Edition)", "The Times of India (TOI)")] <- "The Times of India"
-
-#harmonize The Times
-data$Newspaper[data$Newspaper %in% c("The Sunday Times (London)", "The Times (London)")] <- "The Times"
-
-##make country variable
-India <- c("The Times of India", "The Hindu") 
-UK <- c("The Guardian", "The Times")
-
-data$Country <- data$Newspaper
-data$Country[data$Country %in% India] <- "India"
-data$Country[data$Country %in% UK] <- "UK"
-
-unique(data$Country)
+data@meta$Date
 
 ##Split Year variable
-data <- data %>%
+data@meta <- data@meta %>%
   dplyr::mutate(Year = lubridate::year(Date), 
                 Month = lubridate::month(Date), 
                 Day = lubridate::day(Date))
 
-##make Paragraph ID
-data$Par_ID <- with(data, paste0(Par_ID, Newspaper, Headline, Year))
+head(data@paragraphs)
 
-##drop unnecessary columns
-data <- subset(data, select = -c(Edition, Graphic, Source_File))
+# ##make Paragraph ID
+# data$Par_ID <- with(data, paste0(Par_ID, Newspaper, Headline, Year))
+
+# ##drop unnecessary columns
+# data <- subset(data, select = -c(Edition, Graphic, Source_File))
+```
+
+```{r}
+# meta_articles <- lnt_convert(data, to = "data.frame") #keep only one df 
+#meta_paragraphs
+mp <- lnt_convert(data, to = "data.frame", what = "Paragraphs")
+```
+
+##----------------turn paragraphs into single dataframe
+```{r}
+###update ID variables
+# meta_paragraphs$Art_ID <- with(meta_paragraphs, paste0(Art_ID, Newspaper, Headline, Date)) #new ID
+# 
+# data <- meta_paragraphs
 ```
 
 ##basic data cleaning (removing unnecessary sections)
 ```{r}
 ##-------------------do some basic data cleaning
 
-##remove formatting issues: \\x95The land or \\x93Unchecked
-# step might become unnecessary if I remove pubctuation and numbers for analysis
-data$Paragraph <- stri_replace_all(data$Paragraph, "", regex = "\\\\x\\d\\d")
+# ##remove formatting issues: \\x95The land or \\x93Unchecked
+# # step might become unnecessary if I remove pubctuation and numbers for analysis
+# data$Paragraph <- stri_replace_all(data$Paragraph, "", regex = "\\\\x\\d\\d")
 
 ##--------------------extract subject classification info and remove irrelavnt infor paragraphs
 
 ##make dfs that include relevant paragraphs
-lang <- data[grep("Language:", data$Paragraph), ]
-publ <- data[grep("Publication-Type:", data$Paragraph), ]
-classi <- data[grep("Classification", data$Paragraph), ]
-subj <- data[grep("Subject:", data$Paragraph), ]
-indust <- data[grep("Industry:", data$Paragraph), ]
-geo <- data[grep("Geographic:", data$Paragraph), ]
-pers <- data[grep("Person:", data$Paragraph), ]
-comp <- data[grep("Company:", data$Paragraph), ]
-tick <- data[grep("Ticker:", data$Paragraph), ]
+lang <- mp[grep("Language:", mp$Paragraph), ]
+publ <- mp[grep("Publication-Type:", mp$Paragraph), ]
+classi <- mp[grep("Classification", mp$Paragraph), ]
+subj <- mp[grep("Subject:", mp$Paragraph), ]
+indust <- mp[grep("Industry:", mp$Paragraph), ]
+geo <- mp[grep("Geographic:", mp$Paragraph), ]
+pers <- mp[grep("Person:", mp$Paragraph), ]
+comp <- mp[grep("Company:", mp$Paragraph), ]
+tick <- mp[grep("Ticker:", mp$Paragraph), ]
+journ <- mp[grep("Journal Code:", mp$Paragraph), ]
 
 ##make vector including IDs of Paragraphs to be dropped
-drop_par <- c(lang$Par_ID, publ$Par_ID, classi$Par_ID, subj$Par_ID, indust$Par_ID, geo$Par_ID, pers$Par_ID, comp$Par_ID, tick$Par_ID)
+drop_par <- c(lang$Par_ID, publ$Par_ID, classi$Par_ID, subj$Par_ID, indust$Par_ID, geo$Par_ID, pers$Par_ID, comp$Par_ID, tick$Par_ID, journ$Par_ID)
 
 # ##remove irrelevant dataframes
 # rm(lang, classi, tick)
 
 ##remove these paragraphs from dataset 
-data <- data %>%
+mp <- mp %>%
   filter(!Par_ID %in% drop_par)
 
-head(data$Paragraph, n = 15)
-rm(drop_par) #from assignment for Hindu: always remove first words, written in all Caps (?)
+head(mp$Paragraph, n = 20)
+rm(drop_par)
+
+
+
 ```
 
 
-##------------------------make subject classification variable
 ```{r}
-##edit df
-subj <- rename(subj, Classification = Paragraph) #rename Paragraph value
-subj <- subset(subj, select = c(Art_ID, Classification)) #drop irrelevant columns
 
-##clean Classification column
+###remove empty paragraphs
+mp1 <- mp
 
-#remove subject tag
-subj$Classification <- stri_replace_all(subj$Classification, "", regex = "Subject:") # remove weird formatting
-head(subj$Classification)
+mp1$Paragraph <- stri_trim(mp$Paragraph)
 
-#trim white spaces
-subj$Classification <- stri_trim(subj$Classification)
-head(subj)
+##remove paragraphs with less than three words
+mp1 <- mp1 %>% filter(nchar(Paragraph) > 2)
 
-##merge two df
-identical(length(unique(subj$Art_ID)), length(unique(data$Art_ID))) #check for equal amount of Art IDs
-data <- merge(data, subj, by = "Art_ID")       # Applying merge() function
-head(data)
 
-##could also add other info, e.g. industry, publication, geo, pers e.g -> just make sure to fill NAs
 
-# Save multiple objects
-save(data, file = "dataset.RData")
-# To load the data again
-load("dataset.RData")
+
+
 ```
-
-
-
 
 ##----------------aggragate paragraphs into article text
 #make df of aggregated paragraphs
 #?can I use sth else in collapse, e.g. \n to allow quanteda to reshape from text to paragraph
-articles <- aggregate(Paragraph ~ Art_ID, data = data, FUN = paste, collapse = "")
+
+```{r}
+articles <- aggregate(Paragraph ~ Art_ID, data = mp, FUN = paste, collapse = "")
 
 #rename Paragraph variable into Text
 articles <- rename(articles, Text = Paragraph) #rename Paragraph value
@@ -233,41 +260,10 @@ rm (data)
 head(articles$Text, n =1)
 
 rm(comp, geo, inust, pers, publ, subj, subj2, indust)
+```
 
 
-##----------------------------filter out articles where classifier includes only regulation
-tags <- c("GLOBAL WARMING" , "CLIMATOLOGY" , "CLIMATE CHANGE" ,  "GREENHOUSE GASES" , "WILDFIRES" , "FIRES" , "FOREST FIRES" , "NATURAL DISASTERS" , "DROUGHT" , "WEATHER EVENTS" , "HEAT WAVES" , "SEVERE WEATHER" , "NATURAL DISASTERS" , "SUSTAINABILITY" , "EXTREME TEMPERATURES" , "FLOODS" , "ECOSYSTEMS" , "COASTAL AREAS " , " INFECTIOUS DISEASE " , " PUBLIC HEALTH " , " POLLUTION " , " NEGATIVE ENVIRONMENTAL NEWS " , " IRRIGATION")
-
-art_reg <- 
-  with(articles, articles[grepl("REGULATION & POLICY", Classification) & 
-                      !grepl(paste(tags, collapse = "|"), Classification), ])
-
-art_reg$Classification
-
-##removes articles with e.g. tag "immigration regulation & policy"
-
-##eyeball test confirmed: articles are not on climate change / high error rate
-
-##how many articles will be dropped by newspaper?
-a <- table(art_reg$Newspaper) #is it because of electronic vs.?
-a
-
-##220 articles in total
-#The Hindu: 10
-#NYT: 142
-#TOI: 55
-#USA Today
-
-##remove these texts from articles and paragraphs datasets
-articles <- articles %>%
-  filter(!Art_ID %in% art_reg$Art_ID)
-
-para <- para %>%
-  filter(!Art_ID %in% art_reg$Art_ID)
-
-names(para)
-rm(art_reg)
-
+```{r}
 # Save multiple objects
 save(articles, para, file = "Data/artpara.RData")
 # To load the data again
@@ -275,7 +271,6 @@ load("Data/artpara.RData")
 
 #save articles as csv
 write.csv(articles,"Data/articles.csv", row.names = T)
-
-
+```
 
 
