@@ -81,16 +81,7 @@ load(file = "data.RData")
 ##-----------------------TURN INTO META_Para and META_article dfs
 ```{r}
 data@meta[8,] 
-data@meta[data@meta$Newspaper == "May 4, 2012",] #Times London
-
 data@meta[data@meta$Newspaper == "March 20, 2009", ] #Times London, Times London, Times London
-
-
-
-
-dates <- unique(data@meta$Date)
-unique(data@meta$Newspaper)
-
 
 ```
 ```{r correct Newspaper}
@@ -182,13 +173,9 @@ mp <- lnt_convert(data, to = "data.frame", what = "Paragraphs")
 
 ##basic data cleaning (removing unnecessary sections)
 ```{r}
-##-------------------do some basic data cleaning
 
-# ##remove formatting issues: \\x95The land or \\x93Unchecked
-# # step might become unnecessary if I remove pubctuation and numbers for analysis
-# data$Paragraph <- stri_replace_all(data$Paragraph, "", regex = "\\\\x\\d\\d")
 
-##--------------------extract subject classification info and remove irrelavnt infor paragraphs
+##-------------------- remove irrelavnt infor paragraphs
 
 ##make dfs that include relevant paragraphs
 lang <- mp[grep("Language:", mp$Paragraph), ]
@@ -212,58 +199,53 @@ drop_par <- c(lang$Par_ID, publ$Par_ID, classi$Par_ID, subj$Par_ID, indust$Par_I
 mp <- mp %>%
   filter(!Par_ID %in% drop_par)
 
-head(mp$Paragraph, n = 20)
 rm(drop_par)
 
 
-
 ```
 
 
-```{r}
-
+```{r collapse paragraphs into article text}
 ##remove paragraphs with less than three words
 mp <- mp[grepl('\\w*\\s\\w*\\s\\w*',mp$Paragraph),]
 
-##split year variable
-
-```
-
-##----------------aggragate paragraphs into article text
-#make df of aggregated paragraphs
-#?can I use sth else in collapse, e.g. \n to allow quanteda to reshape from text to paragraph
-
-```{r}
-articles <- aggregate(Paragraph ~ Art_ID, data = mp, FUN = paste, collapse = "")
-
-#rename Paragraph variable into Text
-articles <- rename(articles, Text = Paragraph) #rename Paragraph value
-
-#make dataset for merger with only one row per Art_ID
-data2 <- subset(data, select = -c(Paragraph))
-data2 = data2[!duplicated(data2$Art_ID),]
+##collapse paragraphs into articles
+articles <- aggregate(Paragraph ~ Art_ID, data = mp, FUN = paste, collapse = "") 
 
 #merge dataset to get articles df
-articles <- merge(articles, data2, by = "Art_ID")
+mp <- subset(mp, select = -c(Paragraph))
+mp = mp[!duplicated(mp$Art_ID),]
+final_data <- merge(articles, mp, by = "Art_ID")
 
-rm(data2) #remove unnecessary df
-para <- data #rename paragraphs df
-rm (data)
+##rename Paragraph variable into Text
+final_data <- rename(final_data, Text = Paragraph) #rename Paragraph value
 
-head(articles$Text, n =1)
+##remove motherwell headlines
+final_data <- 
+  with(final_data, final_data[!grepl("Motherwell", Headline), ])
 
-rm(comp, geo, inust, pers, publ, subj, subj2, indust)
+##remove unnecessary variables
+final_data <- subset(final_data, select = -c(Art_ID, Par_ID, Author, Edition, Graphic, Month, Day, Section, Source_File))
+names(final_data)
+
+
+####!!!!!!! FIX ISSUE: DIFFERENT LENGTH ARTICLES + FINAL DATA
 ```
-
 
 ```{r}
-# Save multiple objects
-save(articles, para, file = "Data/artpara.RData")
-# To load the data again
-load("Data/artpara.RData")
+##make time period variable based on year variable (period: 00, 05, 10, 15)
 
-#save articles as csv
-write.csv(articles,"Data/articles.csv", row.names = T)
+
 ```
+
+
+
+```{r collapse paragraphs into article text}
+# Save multiple objects
+save(final_data, file = "final_data.RData")
+load("final_data.RData")
+```
+
+
 
 
