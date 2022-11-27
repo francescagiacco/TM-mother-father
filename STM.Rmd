@@ -1,0 +1,191 @@
+---
+title: "test STM"
+author: "Francesca Giacco"
+date: "2022-11-26"
+output: html_document
+---
+
+```{r}
+#load packages
+library(tidyverse)
+library(stm)
+library(quanteda)
+library(quanteda.textstats)
+library(wordcloud)
+library(wordcloud2)
+library(RColorBrewer)
+
+#add period
+final_data <- final_data %>% 
+  mutate(Period= 
+             ifelse (Year <2005, 1,
+             ifelse (Year <2010, 2,
+             ifelse (Year <2015, 3, 4))))
+
+
+final_data<- final_data %>% 
+  mutate(Headline=tolower(Headline)) %>% 
+  mutate(Mother= str_detect(final_data$Headline, "mother"))
+
+
+#keep only metadata and texts 
+
+data<- final_data %>% 
+            select("Year", "Text", "Newspaper", "Mother")
+
+```
+
+```{r}
+#create document feature matrix for mother and father separately 
+m<- data %>% 
+  filter(Mother=="TRUE")
+
+f<- data %>% 
+  filter(Mother=="FALSE")
+
+
+dfm_prep<- function(x) { 
+  x$Text%>% 
+  tokens(remove_punct = TRUE, remove_numbers = TRUE) %>%
+  tokens_tolower() %>%
+  tokens(remove_punc=TRUE) %>% 
+  tokens_remove(stopwords("English")) %>% 
+  tokens_remove(c("said")) 
+  
+}
+
+#dfm<- dfm_prep(data)
+
+dfmm<- dfm_prep(m) %>%
+  tokens_wordstem() %>% 
+  tokens_remove(c("mother")) %>% 
+  dfm() %>% 
+  dfm_trim(min_termfreq = 5)
+
+
+dfmf<- dfm_prep(f) %>% 
+  tokens_wordstem() %>% 
+  tokens_remove(c("father")) %>% 
+  dfm() %>% 
+  dfm_trim(min_termfreq = 5)
+
+
+freq<- function(x){
+a<- x %>% textstat_frequency() %>% head(20)
+a$feature<- factor(a$feature, levels=a$feature) 
+ggplot(a, aes(x=frequency, y=feature, fill=docfreq)) +
+geom_col() #+ ggtitle("Most frequent words around the word Mother")
+a
+ggsave("plot.png", a,  width=2, height=2)
+}
+
+freq(dfmf)
+
+#plot for mother 
+freq<- dfmm %>% textstat_frequency() %>% head(20)
+freq$feature<- factor(freq$feature, levels=freq$feature)
+
+a<- ggplot(freq, aes(x=frequency, y=feature, fill=docfreq)) +
+ geom_col() + ggtitle("Most frequent words around the word Mother")
+a
+ ggsave("dfmm.png", a,  width=2, height=2)
+ 
+ #plot for father
+ 
+freq<- dfmf %>% textstat_frequency() %>% head(20)
+freq$feature<- factor(freq$feature, levels=freq$feature)
+
+a<- ggplot(freq, aes(x=frequency, y=feature, fill=docfreq)) +
+ geom_col() + ggtitle("Most frequent words around the word Father")
+a
+ ggsave("dfmf.png", a,  width=2, height=2)
+ 
+ 
+
+#cloudmapper mother - does not work!! 
+
+set.seed(1234) # for reproducibility 
+
+wordcloud(words = dfmm$feature, freq = dfmm$frequency, min.freq = 1, max.words=20, random.order=FALSE, rot.per=0.35, colors=brewer.pal(8, "Dark2"))
+```
+
+
+```{r}
+which(is.na(data$Year))
+data<- na.omit(data)
+```
+
+```{r}
+#try STM
+
+processed <- textProcessor(data$Text, metadata = data)
+
+out <- prepDocuments(processed$documents, processed$vocab, processed$meta)
+
+docs <- out$documents
+vocab <- out$vocab
+meta <-out$meta
+
+PrevFit <- stm(documents = out$documents, vocab = out$vocab, 
+               K = 20, prevalence =~ Mother  + Newspaper + Year ,
+                      max.em.its = 75, data = out$meta,
+                       init.type = "Spectral")
+
+labelTopics(PrevFit, c(1, 5, 17))
+topics<-labelTopics(PrevFit)
+
+```
+
+
+```{r}
+#print docs strongly associated with a topic 
+#don't know if we need it 
+thoughts17 <- findThoughts(PrevFit, texts = data$Text,  n = 2, topics = 17)$docs[[1]]ù
+thoughts17
+
+par(mfrow = c(1, 2),mar = c(.5, .5, 1, .5))
+plotQuote(thoughts17, width = 50, main = "Topic 17")
+#lol article is too long. if we want to show this, we need shorter texts 
+
+
+
+
+```
+```{r}
+
+out$meta$Mother <- as.factor(out$meta$Mother)
+prep <- estimateEffect(1:20 ~ Mother + Newspaper + Year, PrevFit,
+meta = out$meta, uncertainty = "Global")
+summary(prep, topics=1)
+
+plot(PrevFit, type = "summary", xlim = c(0, .3))
+
+
+```
+
+```{r}
+
+
+```
+
+```{r}
+#plotRemoved(processed$documents, lower.thresh = seq(1, 200, by = 100))
+# out <- prepDocuments(processed$documents, processed$vocab,
+#+ processed$meta, lower.thresh = 15)
+ 
+poliblogSelect <- selectModel(out$documents, out$vocab, K = 20, prevalence =~ rating + s(day), max.em.its = 75, data = out$meta, runs = 20, seed = 8458159)
+
+storage <- searchK(out$documents, out$vocab, K = 7, prevalence =~ Newspaper + s(Year), data = meta)
+
+```{r}
+#plotRemoved(processed$documents, lower.thresh = seq(1, 200, by = 100))
+# out <- prepDocuments(processed$documents, processed$vocab,
+#+ processed$meta, lower.thresh = 15)
+ 
+poliblogSelect <- selectModel(out$documents, out$vocab, K = 20, prevalence =~ rating + s(day), max.em.its = 75, data = out$meta, runs = 20, seed = 8458159)
+
+storage <- searchK(out$documents, out$vocab, K = 7, prevalence =~ Newspaper + s(Year), data = meta)
+
+
+```
+
