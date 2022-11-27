@@ -22,7 +22,7 @@ final_data <- final_data %>%
              ifelse (Year <2010, 2,
              ifelse (Year <2015, 3, 4))))
 
-
+#add column for mother and father 
 final_data<- final_data %>% 
   mutate(Headline=tolower(Headline)) %>% 
   mutate(Mother= str_detect(final_data$Headline, "mother"))
@@ -31,7 +31,22 @@ final_data<- final_data %>%
 #keep only metadata and texts 
 
 data<- final_data %>% 
-            select("Year", "Text", "Newspaper", "Mother")
+            select("Year", "Text", "Newspaper", "Mother") 
+
+#remove mother 
+#data<- data %>% 
+  mutate(Mother= Text=gsub("mother", " ", data$Text))
+  
+
+data<- data %>% 
+  mutate(Text=tolower(Text)) %>% 
+  rowwise() %>% 
+  mutate(Text1= 
+           ifelse(Mother=="TRUE", 
+                  gsub("mother", "", Text),
+                  gsub("father", "", Text)))
+
+data
 
 ```
 
@@ -45,31 +60,31 @@ f<- data %>%
 
 
 dfm_prep<- function(x) { 
-  x$Text%>% 
+  x$Text1%>% 
   tokens(remove_punct = TRUE, remove_numbers = TRUE) %>%
   tokens_tolower() %>%
   tokens(remove_punc=TRUE) %>% 
   tokens_remove(stopwords("English")) %>% 
-  tokens_remove(c("said")) 
+  tokens_remove(c("said", "like", "just", "can", "go", "one", "say", "also", "want", "told", "get", "say ", "two", "make")) #frequent non interesting words 
   
 }
 
 #dfm<- dfm_prep(data)
 
 dfmm<- dfm_prep(m) %>%
-  tokens_wordstem() %>% 
-  tokens_remove(c("mother")) %>% 
+  tokens_wordstem(language = quanteda_options("language_stemmer")) %>% 
+  tokens_remove(c("s")) %>% 
   dfm() %>% 
   dfm_trim(min_termfreq = 5)
 
 
 dfmf<- dfm_prep(f) %>% 
-  tokens_wordstem() %>% 
-  tokens_remove(c("father")) %>% 
+  tokens_wordstem(language = quanteda_options("language_stemmer")) %>% 
+  tokens_remove(c("s")) %>% 
   dfm() %>% 
   dfm_trim(min_termfreq = 5)
 
-
+#no
 freq<- function(x){
 a<- x %>% textstat_frequency() %>% head(20)
 a$feature<- factor(a$feature, levels=a$feature) 
@@ -79,7 +94,7 @@ a
 ggsave("plot.png", a,  width=2, height=2)
 }
 
-freq(dfmf)
+#freq(dfmf)
 
 #plot for mother 
 freq<- dfmm %>% textstat_frequency() %>% head(20)
@@ -112,13 +127,16 @@ wordcloud(words = dfmm$feature, freq = dfmm$frequency, min.freq = 1, max.words=2
 
 ```{r}
 which(is.na(data$Year))
-data<- na.omit(data)
+data<- na.omit(data) 
+which(is.na(data$Year))
+  
+  
 ```
 
 ```{r}
 #try STM
 
-processed <- textProcessor(data$Text, metadata = data)
+processed <- textProcessor(data$Text1, metadata = data)
 
 out <- prepDocuments(processed$documents, processed$vocab, processed$meta)
 
@@ -131,12 +149,11 @@ PrevFit <- stm(documents = out$documents, vocab = out$vocab,
                       max.em.its = 75, data = out$meta,
                        init.type = "Spectral")
 
-labelTopics(PrevFit, c(1, 5, 17))
-topics<-labelTopics(PrevFit)
+labelTopics(PrevFit)
+topics<-labelTopics(PrevFit, c(1:20))
 
 ```
-
-
+topic 2, 4, 5, 6, 7, 9, 10, 12, 13
 ```{r}
 #print docs strongly associated with a topic 
 #don't know if we need it 
@@ -176,6 +193,7 @@ plot(PrevFit, type = "summary", xlim = c(0, .3))
 poliblogSelect <- selectModel(out$documents, out$vocab, K = 20, prevalence =~ rating + s(day), max.em.its = 75, data = out$meta, runs = 20, seed = 8458159)
 
 storage <- searchK(out$documents, out$vocab, K = 7, prevalence =~ Newspaper + s(Year), data = meta)
+
 
 ```{r}
 #plotRemoved(processed$documents, lower.thresh = seq(1, 200, by = 100))
