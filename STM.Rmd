@@ -153,7 +153,7 @@ labelTopics(PrevFit)
 topics<-labelTopics(PrevFit, c(1:20))
 
 ```
-topic 2, 4, 5, 6, 7, 9, 10, 12, 13
+topic 2, 4, 5, 6, 7, 9, 10, 12, 13,17, 19, 20
 ```{r}
 #print docs strongly associated with a topic 
 #don't know if we need it 
