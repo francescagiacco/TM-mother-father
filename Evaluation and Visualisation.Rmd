@@ -1,0 +1,17 @@
+---
+title: "Evaluation and Visualisation"
+author: "Maren Rieker"
+date: "2022-11-29"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Choosing K = 20 for this example
+
+```{r}
+
+
+```

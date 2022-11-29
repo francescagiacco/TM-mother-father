@@ -35,7 +35,7 @@ data<- final_data %>%
 
 #remove mother 
 #data<- data %>% 
-  mutate(Mother= Text=gsub("mother", " ", data$Text))
+#  mutate(Mother= Text=gsub("mother", " ", data$Text))
   
 
 data<- data %>% 
@@ -46,7 +46,7 @@ data<- data %>%
                   gsub("mother", "", Text),
                   gsub("father", "", Text)))
 
-data
+#data
 
 ```
 
@@ -144,10 +144,14 @@ docs <- out$documents
 vocab <- out$vocab
 meta <-out$meta
 
-PrevFit <- stm(documents = out$documents, vocab = out$vocab, 
-               K = 20, prevalence =~ Mother  + Newspaper + Year ,
-                      max.em.its = 75, data = out$meta,
-                       init.type = "Spectral")
+PrevFit <- stm(documents = out$documents, 
+               vocab = out$vocab, 
+               K = 20, 
+               prevalence =~ Mother  + Newspaper + Year ,
+               max.em.its = 75, 
+               data = out$meta,
+               init.type = "Spectral",
+               seed = TRUE)
 
 labelTopics(PrevFit)
 topics<-labelTopics(PrevFit, c(1:20))
@@ -168,6 +172,7 @@ plotQuote(thoughts17, width = 50, main = "Topic 17")
 
 
 ```
+
 ```{r}
 
 out$meta$Mother <- as.factor(out$meta$Mother)
@@ -195,7 +200,6 @@ poliblogSelect <- selectModel(out$documents, out$vocab, K = 20, prevalence =~ ra
 storage <- searchK(out$documents, out$vocab, K = 7, prevalence =~ Newspaper + s(Year), data = meta)
 
 
-```{r}
 #plotRemoved(processed$documents, lower.thresh = seq(1, 200, by = 100))
 # out <- prepDocuments(processed$documents, processed$vocab,
 #+ processed$meta, lower.thresh = 15)
@@ -205,5 +209,40 @@ poliblogSelect <- selectModel(out$documents, out$vocab, K = 20, prevalence =~ ra
 storage <- searchK(out$documents, out$vocab, K = 7, prevalence =~ Newspaper + s(Year), data = meta)
 
 
+```
+
+####vEvaluation and Visualisation
+
+Example K = 20; will be adjusted for officially chosen K
+```{r}
+out$meta$Mother <- as.factor(out$meta$Mother)
+prep <- estimateEffect(1:20 ~ Mother + Newspaper + Year, PrevFit,
+meta = out$meta, uncertainty = "Global")#, method = "difference") #does not work yet; but according to the vignette, as soon as we have a model with content = Mother (which is binary), method should be set to difference - this will show with which word the topics are more closely associated!!
+#or i misunderstood lol i think difference can also work without content specified
+summary(prep, topics=1)
+
+plot(prep, 
+     covariate = "Mother", 
+     topics = c(2, 3, 17),
+     model = PrevFit,
+     method = "difference",
+     cov.value1 = "Mother", cov.value2 = "Father", #i think the error lays here - change preprocessing so mother and father get values??
+     main = "Effect of Mother vs. Father",
+     custom.labels = "Employment", "Royal Family", "Childbirth")
+
+```
+
+Smooth function topic prevalence:
+```{r}
+plot(prep, "", method = "continuous", topics = 17, model = PrevFit, printlegend = F, xaxt = "n", xlab = "Years (2000-2019)")
+
+
+plot(prep, "day", method = "continuous", topics = 7,
++ model = z, printlegend = FALSE, xaxt = "n", xlab = "Time (2008)")
+R> monthseq <- seq(from = as.Date("2008-01-01"),
++ to = as.Date("2008-12-01"), by = "month")
+R> monthnames <- months(monthseq)
+R> axis(1,at = as.numeric(monthseq) - min(as.numeric(monthseq)),
++ labels = monthnames)
 ```
 
