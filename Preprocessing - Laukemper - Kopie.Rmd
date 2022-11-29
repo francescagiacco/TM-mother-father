@@ -46,7 +46,7 @@ data <- data[!duplicated(data@articles$Article), ] #remove direct duplicates
 
 Why did I get there error meassage: You supplied NA values to dates, when actually no NAs
 
-We manually compared the texts of potential duplicates with varius similarity scores. In the end, we decided on a cut-off of 0.95.
+We manually compared the texts of potential duplicates with various similarity scores. In the end, we decided on a cut-off of 0.95.
 
 ```{r}
 nrow(is.na(data@meta$Date))
@@ -220,9 +220,9 @@ final_data <- merge(articles, mp, by = "Art_ID")
 ##rename Paragraph variable into Text
 final_data <- rename(final_data, Text = Paragraph) #rename Paragraph value
 
-##remove motherwell headlines
+##remove motherwell and mothercare headlines
 final_data <- 
-  with(final_data, final_data[!grepl("Motherwell", Headline), ])
+  with(final_data, final_data[!grepl(c("Motherwell", "Mothercare"), Headline), ])
 
 ##remove unnecessary variables
 final_data <- subset(final_data, select = -c(Art_ID, Par_ID, Author, Edition, Graphic, Month, Day, Section, Source_File))

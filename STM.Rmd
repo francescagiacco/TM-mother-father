@@ -35,7 +35,7 @@ data<- final_data %>%
 
 #remove mother 
 #data<- data %>% 
-  mutate(Mother = Text = gsub("mother", " ", data$Text))
+#  mutate(Mother = Text = gsub("mother", " ", data$Text))
   
 
 data<- data %>% 
@@ -168,6 +168,7 @@ plotQuote(thoughts17, width = 50, main = "Topic 17")
 
 
 ```
+
 ```{r}
 
 out$meta$Mother <- as.factor(out$meta$Mother)
