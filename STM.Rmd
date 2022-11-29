@@ -14,6 +14,8 @@ library(quanteda.textstats)
 library(wordcloud)
 library(wordcloud2)
 library(RColorBrewer)
+library(tidytext)
+
 
 #add period
 final_data <- final_data %>% 
@@ -221,6 +223,7 @@ meta = out$meta, uncertainty = "Global")#, method = "difference") #does not work
 #or i misunderstood lol i think difference can also work without content specified
 summary(prep, topics=1)
 
+<<<<<<< Updated upstream
 plot(prep, 
      covariate = "Mother", 
      topics = c(2, 3, 17),
@@ -229,8 +232,349 @@ plot(prep,
      cov.value1 = "Mother", cov.value2 = "Father", #i think the error lays here - change preprocessing so mother and father get values??
      main = "Effect of Mother vs. Father",
      custom.labels = "Employment", "Royal Family", "Childbirth")
+=======
+plot(FiftFit, type = "summary", xlim = c(0, .3))
+```
+
+
+
+
+
+Diagnostics to get good K: 
+```{r}
+#code from julia silge, thought it would be cool to give our estimation more credibility
+#but well does not run in an acceptable time for me
+library(furrr)
+plan(multisession, workers=8)
+
+many_models <- tibble(K = c(20, 30, 40, 50, 70)) %>% 
+  mutate(topic_model = future_map(K, ~stm(documents = out$documents, 
+                                          vocab = out$vocab, 
+                                          K = ., 
+                                          prevalence =~ + Newspaper + s(Year) ,
+                                          content =~ Mother,
+                                          max.em.its = 75, 
+                                          data = out$meta,
+                                          init.type = "Spectral", 
+                                          seed = TRUE)))
+
+
 
 ```
+```{r}
+heldout <- make.heldout(documents = out$documents, vocab = out$vocab)
+
+k_result <- many_models %>%
+  mutate(#exclusivity = map(topic_model, exclusivity),
+         semantic_coherence = map(topic_model, semanticCoherence, out$documents),
+         eval_heldout = map(topic_model, eval.heldout, heldout$missing),
+         residual = map(topic_model, checkResiduals, out$documents),
+         bound =  map_dbl(topic_model, function(x) max(x$convergence$bound)),
+         lfact = map_dbl(topic_model, function(x) lfactorial(x$settings$dim$K)),
+         lbound = bound + lfact,
+         iterations = map_dbl(topic_model, function(x) length(x$convergence$bound)))
+
+k_result
+```
+
+
+```{r}
+a<-k_result %>%
+  transmute(K,
+            `Lower bound` = lbound,
+            Residuals = map_dbl(residual, "dispersion"),
+            `Semantic coherence` = map_dbl(semantic_coherence, mean),
+            `Held-out likelihood` = map_dbl(eval_heldout, "expected.heldout")) %>%
+  gather(Metric, Value, -K) %>% 
+  ggplot(aes(K, Value, color = Metric)) +
+  geom_line(size = 1.5, alpha = 0.7, show.legend = FALSE) +
+  facet_wrap(~Metric, scales = "free_y") +
+  labs(x = "K (number of topics)",
+       y = NULL,
+       title = "Model diagnostics by number of topics",
+       subtitle = "These diagnostics indicate that a good number of topics would be around 50") 
+
+  a 
+  ggsave("models.png", a,  width=5, height=5)
+  ggsave("models2.png", a,  width=7, height=7)
+  ggsave("models3.png", a,  width=10, height=10)
+  ggsave("models4.png", a,  width=12, height=12)
+```
+
+
+```{r}
+
+#Model we chose 
+
+topic_model <- k_result %>% 
+  filter(K == 50) %>% 
+  pull(topic_model) %>% 
+  .[[1]]
+
+topic_model
+
+library(bigrquery)
+library(tidyverse)
+td_beta <- tidy(topic_model)
+
+td_beta
+
+td_gamma <- tidy(topic_model, matrix = "gamma",
+                 document_names = rownames(out$documents))
+>>>>>>> Stashed changes
+
+td_gamma
+```
+```{r}
+library(ggthemes)
+
+top_terms <- td_beta %>%
+  arrange(beta) %>%
+  group_by(topic) %>%
+  top_n(7, beta) %>%
+  arrange(-beta) %>%
+  select(topic, term) %>%
+  summarise(terms = list(term)) %>%
+  mutate(terms = map(terms, paste, collapse = ", ")) %>% 
+  unnest()
+
+gamma_terms <- td_gamma %>%
+  group_by(topic) %>%
+  summarise(gamma = mean(gamma)) %>%
+  arrange(desc(gamma)) %>%
+  left_join(top_terms, by = "topic") %>%
+  mutate(topic = paste0("Topic ", topic),
+         topic = reorder(topic, gamma))
+
+gamma_terms %>%
+  top_n(20, gamma) %>%
+  ggplot(aes(topic, gamma, label = terms, fill = topic)) +
+  geom_col(show.legend = FALSE) +
+  geom_text(hjust = 0, nudge_y = 0.0005, size = 3,
+            ) +
+  coord_flip() +
+ scale_y_continuous(expand = c(0,0),
+                     limits = c(0, 0.09))+
+   #labels = percent_format()) +
+  #theme_tufte(base_family = "IBMPlexSans", ticks = FALSE) +
+  #theme(plot.title = element_text(size = 16,
+                                  #family="IBMPlexSans-Bold"),
+      #  plot.subtitle = element_text(size = 13)) 
+
+  labs(x = NULL, y = expression(gamma),
+       title = "Top 20 topics by prevalence in the Mother/Father Corpus",
+       subtitle = "With the top words that contribute to each topic")
+
+labelTopics(topic_model, c(1:50))
+
+```
+Output: 
+Topic Words:
+ Topic 1: kindergarten, sur, mandarin, oprah, enquir, fraudul, allur 
+ Topic 2: yoke, self-fulfil, -repres, hayward, patriarchi, jowel, post-feminist 
+ Topic 3: zidan, close-run, go-kart, marino, dustin, frenchman, ridden 
+ Topic 4: triall, numi, revamp, calver, primark, monthsit, whitbread 
+ Topic 5: head-long, taylor-wood, familiesmi, secreti, haran, relationshipit, lunchbox 
+ Topic 6: epidemiolog, mammalian, lummaa, geneticist, pittsburgh, cortisol, oestrogen 
+ Topic 7: one-storey, carh, hosepip, third-storey, scunthorp, saturdayth, dundalk 
+ Topic 8: cinemat, bihar, shorthand, elba, hbo, spielberg, himalaya 
+ Topic 9: mcconnel, bratza, traja, rapporteur, seahors, change--circumst, newsroom 
+ Topic 10: iht, houseq, homeq, whomev, santand, debit, cgt 
+ Topic 11: --bride, sureh, slip-, cliveden, wantedon, upstag, grammi 
+ Topic 12: luke, charteri, batti, josamaritansi, self-harm, wwwbefriendersorg, watersh 
+ Topic 13: xinhua, southeastern, itpolic, childrenpolic, unbuckl, sabah, monthsh 
+ Topic 14: klan, klux, midwest, borger, dacr, tighter, attorney-gener 
+ Topic 15: scalpel, himorgan, porch, bookstor, sped, banana, zone 
+ Topic 16: piss-ab, caldecott, potato-head, warlock, fairbridg, pinjarra, briscoe-mitchel 
+ Topic 17: shirell, kany, lennon, rapper, eerili, flinch, sublim 
+ Topic 18: kohl, wehrmacht, swastika, warsaw, carpathian, hannelor, lusia 
+ Topic 19: breastfeed, midwiv, chukwu, dalrympl, nct, breast-fe, neonat 
+ Topic 20: jenkin, five-week, murderprosecutor, ricin, jenkinson, reddihough, maxin 
+ Topic 21: duchess, brazier, thati, priceless, insensit, holloway, royal 
+ Topic 22: willett, cbi, low-skil, dual-incom, jobsth, use---lose-, childcareth 
+ Topic 23: hypothermia, gaza, fast-flow, shangri-la, gunfir, cougar, disori 
+ Topic 24: multi-task, payphon, tech, cube, net-aport, pillowcas, noodl 
+ Topic 25: filth, culpabl, twin, sussex, sunday, mail, adekoya 
+ Topic 26: caseload, ill-adapt, societyorgan, loughton, resumpt, csa, systemth 
+ Topic 27: sajad, stornoway, cambra, puent, llanelli, three--on, greensmith 
+ Topic 28: itmr, frugal, lewi, lorna, itit, terri, skin 
+ Topic 29: sai, badiova, harmth, jabar, hussini, paktia, squirt 
+ Topic 30: fumbl, headstrong, femail, damon, psycho, engrav, detest 
+ Topic 31: homecom, tribul, marmalad, aah, bechdel, glamazon, slippag 
+ Topic 32: mysteryth, crackland, burrag, bronglai, aruna, aberaeron, rufuss 
+ Topic 33: surrogaci, unabash, -vitro, for, intermediari, surrog, consecut 
+ Topic 34: caith, resplend, norther, orpington, footman, colonel--chief, freesia 
+ Topic 35: penros, teagu, yearsad, dram, genealogist, herei, helpa 
+ Topic 36: ethicist, ethicistthetimescouk, dilemmaor, annalisa, slow-grow, quandari, toodont 
+ Topic 37: striker, premiership, bosnian, first-team, refere, kean, oxbridg 
+ Topic 38: proviso, lucian, stratford, freud, a-month, rembrandt, well-heel 
+ Topic 39: spys, zodiac, baghdad, ackerley, masterpiec, zealot, soviet 
+ Topic 40: ladyship, hypoxia, oesophag, wlr, pursuant, gmc, urinari 
+ Topic 41: saint-germain, hearti, olivia, unsolicit, exhilar, midfield, lewiss 
+ Topic 42: shafilea, mcsporran, alesha, farzana, urdu, encrypt, iftikhar 
+ Topic 43: redgrav, barbado, kock, wheelchair-bound, lifemr, -two, tricycl 
+ Topic 44: neo-nazi, shahbaz, nawaz, ric, sharif, pti, canvass 
+ Topic 45: whyther, fivei, herand, unbrush, playdat, matilda, cluck 
+ Topic 46: assam, gurno, ynysfach, wallag, benji, bournvill, larkhal 
+ Topic 47: multi, mcdonagh, daria, bambi, gleeson, gerwig, screenwrit 
+ Topic 48: putin, kremlin, queensland, pta, keat, prep, themit 
+ Topic 49: roxon, nsw, proctor, --court, hallam, normalis, clinician 
+ Topic 50: chris, edi, huhn, kent, steel, southwark, upset 
+ 
+ Covariate Words:
+ Group FALSE: mother--two, himin, matron, antoni, himsh, hampshir, bestow 
+ Group TRUE: vermont, itand, gabi, non-person, subordin, powerhous, clennel 
+ 
+ Topic-Covariate Interactions:
+ Topic 1, Group FALSE: matrix, ramsay, motown, cahil, tito, cheri, jay-z 
+ Topic 1, Group TRUE: nita, constanz, xaver, dialect, franz, cleans, herb 
+ 
+ Topic 2, Group FALSE: flora, bma, self-determin, orwellian, yardley, culturew, menin 
+ Topic 2, Group TRUE: badint, non-, meaghan, unexplor, essentialist, dos, ideologu 
+ 
+ Topic 3, Group FALSE: sarkozi, daley, zohra, clover, toulous, hingi, villeneuv 
+ Topic 3, Group TRUE: fishermen, jag, gameh, shand, seil, pos, hrh 
+ 
+ Topic 4, Group FALSE: insolv, longer-term, oust, handset, outperform, sec, businessth 
+ Topic 4, Group TRUE: hefti, alba, bebber, malaria, clunki, four-fifth, couldin 
+ 
+ Topic 5, Group FALSE: babyi, rhea, homebodi, janson, birthreceiv, familywhat, fogi 
+ Topic 5, Group TRUE: heart--heart, narrow-mind, ityou, thaw, dother, anotherit, somethingi 
+ 
+ Topic 6, Group FALSE: babythi, washbrook, bjog, libido, founda, liquoric, ucd 
+ Topic 6, Group TRUE: achill, pancrea, hemispher, birthweight, angelman, forag, inciner 
+ 
+ Topic 7, Group FALSE: kerrigan, awaybi, cathcart, marcia, harpurhey, hashmi, moston 
+ Topic 7, Group TRUE: eccleston, shelton, moremr, bagsth, laybi, saddleworth, kebab 
+ 
+ Topic 8, Group FALSE: kung, huxtabl, tarantino, mcrae, mal, british-educ, gilet 
+ Topic 8, Group TRUE: carousel, ruiz, moneypenni, charliz, huppert, ephron, livesin 
+ 
+ Topic 9, Group FALSE: hfea, paymentsth, ane, clauseth, fertilisationembryolog, primarolo, treatmentthi 
+ Topic 9, Group TRUE: rodriguez, doreen, wuhan, zhang, eus, rathbon, byer 
+ 
+ Topic 10, Group FALSE: melita, surplus, stupend, windfal, arcan, ilott, international 
+ Topic 10, Group TRUE: fairest, guarantor, toiletri, well-deserv, househi, guardiancoukmoney, personaleffectsguardiancouk 
+ 
+ Topic 11, Group FALSE: zeta-jon, mam, riff, allegedth, bunter, android, wife-beat 
+ Topic 11, Group TRUE: arbroath, edwina, bedand, arsenic, aniston, bruni, topless 
+ 
+ Topic 12, Group FALSE: gilmor, hogan, filler, eleven-year-old, honeytrap, difficultiesi, haringey 
+ Topic 12, Group TRUE: warmer, corinn, filicid, sunris, instantlyth, problemssh, london-bound 
+ 
+ Topic 13, Group FALSE: kashmir, nostra, worthington, gang-rap, rapebut, cosa, supergrass 
+ Topic 13, Group TRUE: sherborn, ayr, finlayson, indetermin, leveson, mackinnon, mediaguardian 
+ 
+ Topic 14, Group FALSE: ivanka, elian, portman, havana, osc, jefferson, rove 
+ Topic 14, Group TRUE: claridg, everyoneth, clooney, alamuddin, apartheid, tatum, amal 
+ 
+ Topic 15, Group FALSE: novello, dvla, mandela, panton, airili, inflam, prentic 
+ Topic 15, Group TRUE: ballerina, biba, hume, frock, cone, lank-hair, goddard 
+ 
+ Topic 16, Group FALSE: bassey, eliza, kinski, filmsh, occurredth, dumbarton, smilli 
+ Topic 16, Group TRUE: constanc, denniss, sonia, scarfac, dodger, thisit, nadir 
+ 
+ Topic 17, Group FALSE: clearest, chirpi, pessim, unspar, drench, sleek, broadsid 
+ Topic 17, Group TRUE: self-actualis, loveliest, wanna, euphoria, hater, sidekick, cusp 
+ 
+ Topic 18, Group FALSE: fritz, philipp, fusili, frau, kindertransport, synagogu, romanian 
+ Topic 18, Group TRUE: footprint, carnivor, dinosaur, jurass, stopov, readabl, stairsmi 
+ 
+ Topic 19, Group FALSE: breast-f, malbrouck, bevan, oct, midwife-run, free-stand, migrationwatch 
+ Topic 19, Group TRUE: rochdal, pre-exist, attackssh, bfi, awaybi, flabbi, lier 
+ 
+ Topic 20, Group FALSE: tigh, wragg, namus, craik, seven-week, halil, yesterdaytulay 
+ Topic 20, Group TRUE: blumenth, ainsdal, heston, bedbut, pentagon, hirst, marjori 
+ 
+ Topic 21, Group FALSE: gaff, burner, wall--wal, dermot, turnbul, newsread, linehan 
+ Topic 21, Group TRUE: collett, corbett, saleth, geolog, middleton, citysh, windscreen 
+ 
+ Topic 22, Group FALSE: househusband, uptak, hakim, changeth, attackssh, maternitypatern, leavethi 
+ Topic 22, Group TRUE: joshi, anchovi, sweeten, ill-effect, farley, reap, degreeth 
+ 
+ Topic 23, Group FALSE: bait, cano, tarrant, workman, sampson, upstream, alsatian 
+ Topic 23, Group TRUE: zimbabw, mogadishu, roja, dahir, ngos, trinidad, peoplemr 
+ 
+ Topic 24, Group FALSE: arctic, sitter, malon, lego, elv, bagsth, marissa 
+ Topic 24, Group TRUE: shane, allsopp, eastwood, cvs, vcs, stew, scooter 
+ 
+ Topic 25, Group FALSE: maryann, dosh, spike, romani, murderbut, jasper, postman 
+ Topic 25, Group TRUE: tollerton, justicemiss, yesterdaykelli, scaveng, flatth, scrabbl, vest 
+ 
+ Topic 26, Group FALSE: megaphon, solomon, mornington, ineffectu, filkin, batman, blackwal 
+ Topic 26, Group TRUE: baptism, peruvian, untyp, buxton, overrul, unchalleng, involvedbut 
+ 
+ Topic 27, Group FALSE: angelman, harmjudg, pre-teenag, ceremonyth, kidslook, non-scen, maan 
+ Topic 27, Group TRUE: angelo, alma, amo, kershaw, habiba, mcmillan, zion 
+ 
+ Topic 28, Group FALSE: poleax, mortif, donna, maviss, oban, peev, watt 
+ Topic 28, Group TRUE: tyson, pre-fight, fornic, styrofoam, rican, manmad, nuzzl 
+ 
+ Topic 29, Group FALSE: boardman, chun, henriqu, bosworth, toldin, piggi, brunton 
+ Topic 29, Group TRUE: ciara, ludlam, dunkel, dartmoor, inveter, guil, withi 
+ 
+ Topic 30, Group FALSE: lysett, syke, brock, tóibín, salwak, zip, geni 
+ Topic 30, Group TRUE: beanstalk, freddi, rosalind, greenway, stallon, expedi, cilla 
+ 
+ Topic 31, Group FALSE: bedal, redford, snowman, loll, burp, auberon, pheasant 
+ Topic 31, Group TRUE: larkin, antrim, ballard, tant, againand, wainwright, jumpsuit 
+ 
+ Topic 32, Group FALSE: soto, harlesden, forrington, fairless, scotter, fairlesss, toney 
+ Topic 32, Group TRUE: casey, sammi, gabriella, royston, canham, theo, weekendsh 
+ 
+ Topic 33, Group FALSE: armitag, hewlett, mccune, drewitt, zowi, ten-bedroom, drewitt-barlow 
+ Topic 33, Group TRUE: williamson, bronwen, well-publicis, energis, non-specif, spasmod, familiesit 
+ 
+ Topic 34, Group FALSE: eugeni, muffin, birkhal, truffl, crathi, deco, ceram 
+ Topic 34, Group TRUE: gaili, navajo, henna, state---art, conversationalist, undim, mascara 
+ 
+ Topic 35, Group FALSE: babysh, gammi, stedman, chantell, praevia, anaesthetis, availablei 
+ Topic 35, Group TRUE: joey, felix, wallabi, pouch, quigley, high-depend, transplanta 
+ 
+ Topic 36, Group FALSE: stadlen, biddulph, drawback, non-confront, starbuck, familyif, youon 
+ Topic 36, Group TRUE: bacpcouk, proactiv, self-sacrific, youwhen, frontotempor, layla, proftanyabyronthetimescoukyou 
+ 
+ Topic 37, Group FALSE: monologu, clough, femi, christensen, berra, bess, lenton 
+ Topic 37, Group TRUE: sao, turtl, font, robinho, ine, ane, rapp 
+ 
+ Topic 38, Group FALSE: harrog, kira, floss, marston, ohagan, weddel, swanag 
+ Topic 38, Group TRUE: door--door, daw, rhys-jon, ex-servicemen, gell, foyer, killick 
+ 
+ Topic 39, Group FALSE: macgibbon, postag, haw, nabokov, whistler, stasi, spymast 
+ Topic 39, Group TRUE: auxiliari, azor, mao, android, anaesthetis, cipher, declassifi 
+ 
+ Topic 40, Group FALSE: neon, isaiah, redmond, doctor-pati, medulloblastoma, takesha, haver 
+ Topic 40, Group TRUE: clyde, mandelson, kerr, olli, nauru, apocryph, longmor 
+ 
+ Topic 41, Group FALSE: neymar, hamilton, wrexham, shalt, genna, pennywel, dissolut 
+ Topic 41, Group TRUE: bleu, vivienn, romney, mormon, ferrant, excommun, eclair 
+ 
+ Topic 42, Group FALSE: markham, bethel, myle, raqqa, jihadi, bloodcurdl, fgm 
+ Topic 42, Group TRUE: pearc, mcguin, brenton, jacksonvill, shauna, abdullah, docusoap 
+ 
+ Topic 43, Group FALSE: hinckley, chen, thailand, silverman, cosh, yarrow-sand, sunburn 
+ Topic 43, Group TRUE: shin, pyongyang, flynn, mckinlay, tiffney, weakest, vlad 
+ 
+ Topic 44, Group FALSE: far-right, canonis, clergi, loreto, beatifi, mas, cyst 
+ Topic 44, Group TRUE: aitken, kirchner, answermr, algerian, consciousness-rais, paris-dakar, plaza 
+ 
+ Topic 45, Group FALSE: ayelet, ciccon, tia, phoeb, lacross, waldman, whirlwind 
+ Topic 45, Group TRUE: african-caribbean, rayn, chari, lammi, scott-march, jerom, avi 
+ 
+ Topic 46, Group FALSE: harald, bingley, bragg, melvyn, semi-consci, grey-green, raoul 
+ Topic 46, Group TRUE: maidston, sabin, glaucoma, tibetan, falkland, gretel, sodha 
+ 
+ Topic 47, Group FALSE: wrink, vin, riva, keaton, marx, downey, duval 
+ Topic 47, Group TRUE: ryder, delaney, him, tonya, horgan, home-grown, psychodrama 
+ 
+ Topic 48, Group FALSE: sergei, playstat, cutleri, skripal, veil, african-caribbean, weymouth 
+ Topic 48, Group TRUE: cliqu, shorten, pct, juanita, bitchi, hijab, gotcha 
+ 
+ Topic 49, Group FALSE: arthrit, woolley, acupunctur, hillsong, sengstock, benzodiazepin, cantril 
+ Topic 49, Group TRUE: audrey, antipsychot, burl, maelstrom, counten, sea-chang, everit 
+ 
+ Topic 50, Group FALSE: kent, upset, said, told, chris 
+ Topic 50, Group TRUE: vicki, eastleigh, pryce, pointsth, beesley, athen, outsh 
 
 Smooth function topic prevalence:
 ```{r}
