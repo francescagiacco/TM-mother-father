@@ -338,7 +338,7 @@ summary(prep, topics=1)
 
 plot(prep, 
      covariate = "Mother", 
-     topics = c(2, 5, 6,7, 9, 13, 14, 17),
+     topics = c(2, 5, 6, 7, 9, 13, 14, 17),
      model = PrevFit,
      method = "difference",
      cov.value1 = "TRUE", cov.value2 = "FALSE", #i think the error lays here - change preprocessing so mother and father get values??
@@ -357,7 +357,7 @@ prep <- estimateEffect(1:20 ~ Mother + Newspaper + Year, PrevFit, meta = out$met
 
 prep2<- estimateEffect(c(13) ~ Mother*Year , PrevFit, meta= out$meta, uncertainty="None") 
 
-plot(prep2, covariate = "Year", method = "continuous", model = PrevFit, printlegend = F, moderator="Mother", moderator.value="TRUE", linecol = "blue", ylim=c(0.02, 0.11), main="Crime Topic Prevalence") ;  plot(prep2, covariate = "Year", method = "continuous",  model = PrevFit, printlegend = F, moderator="Mother", moderator.value="FALSE", linecol = "red", add = T)
+plot(prep2, covariate = "Year", method = "continuous", model = PrevFit, printlegend = F, moderator="Mother", moderator.value="TRUE", linecol = "blue", ylim=c(0.02, 0.10), main="Crimes/Court Topic Prevalence") ;  plot(prep2, covariate = "Year", method = "continuous",  model = PrevFit, printlegend = F, moderator="Mother", moderator.value="FALSE", linecol = "red", add = T)
 
 prep3<- estimateEffect(c(10) ~ Mother*Year*Newspaper , PrevFit, meta= out$meta, uncertainty="None") 
 
