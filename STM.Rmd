@@ -1,0 +1,351 @@
+---
+title: "test STM"
+author: "Francesca Giacco"
+date: "2022-11-26"
+output: html_document
+---
+
+```{r}
+#load packages
+library(tidyverse)
+library(stm)
+library(quanteda)
+library(quanteda.textstats)
+library(wordcloud)
+library(wordcloud2)
+library(RColorBrewer)
+
+#add period
+final_data <- final_data %>% 
+  mutate(Period= 
+             ifelse (Year <2005, 1,
+             ifelse (Year <2010, 2,
+             ifelse (Year <2015, 3, 4))))
+
+#add column for mother and father 
+final_data<- final_data %>% 
+  mutate(Headline=tolower(Headline)) %>% 
+  mutate(Mother= str_detect(final_data$Headline, "mother"))
+
+
+#keep only metadata and texts 
+
+data<- final_data %>% 
+            select("Year", "Text", "Newspaper", "Mother") 
+
+#remove mother 
+#data<- data %>% 
+#  mutate(Mother = Text = gsub("mother", " ", data$Text))
+  
+
+data<- data %>% 
+  mutate(Text=tolower(Text)) %>% 
+  rowwise() %>% 
+  mutate(Text1= 
+           ifelse(Mother=="TRUE", 
+                  gsub("mother", "", Text),
+                  gsub("father", "", Text)))
+
+data
+
+```
+
+```{r}
+#create document feature matrix for mother and father separately 
+m<- data %>% 
+  filter(Mother=="TRUE")
+
+f<- data %>% 
+  filter(Mother=="FALSE")
+
+
+dfm_prep<- function(x) { 
+  x$Text1%>% 
+  tokens(remove_punct = TRUE, remove_numbers = TRUE) %>%
+  tokens_tolower() %>%
+  tokens(remove_punc=TRUE) %>% 
+  tokens_remove(stopwords("English")) %>% 
+  tokens_remove(c("said", "like", "just", "can", "go", "one", "say", "also", "want", "told", "get", "say ", "two", "make")) #frequent non interesting words 
+  
+}
+
+#dfm<- dfm_prep(data)
+
+dfmm<- dfm_prep(m) %>%
+  tokens_wordstem(language = quanteda_options("language_stemmer")) %>% 
+  tokens_remove(c("s")) %>% 
+  dfm() %>% 
+  dfm_trim(min_termfreq = 5)
+
+
+dfmf<- dfm_prep(f) %>% 
+  tokens_wordstem(language = quanteda_options("language_stemmer")) %>% 
+  tokens_remove(c("s")) %>% 
+  dfm() %>% 
+  dfm_trim(min_termfreq = 5)
+
+#no
+freq<- function(x){
+a<- x %>% textstat_frequency() %>% head(20)
+a$feature<- factor(a$feature, levels=a$feature) 
+ggplot(a, aes(x=frequency, y=feature, fill=docfreq)) +
+geom_col() #+ ggtitle("Most frequent words around the word Mother")
+a
+ggsave("plot.png", a,  width=2, height=2)
+}
+
+#freq(dfmf)
+
+#plot for mother 
+freq<- dfmm %>% textstat_frequency() %>% head(20)
+freq$feature<- factor(freq$feature, levels=freq$feature)
+
+a<- ggplot(freq, aes(x=frequency, y=feature, fill=docfreq)) +
+ geom_col() + ggtitle("Most frequent words around the word Mother")
+a
+ ggsave("dfmm.png", a,  width=2, height=2)
+ 
+ #plot for father
+ 
+freq<- dfmf %>% textstat_frequency() %>% head(20)
+freq$feature<- factor(freq$feature, levels=freq$feature)
+
+a<- ggplot(freq, aes(x=frequency, y=feature, fill=docfreq)) +
+ geom_col() + ggtitle("Most frequent words around the word Father")
+a
+ ggsave("dfmf.png", a,  width=2, height=2)
+ 
+ 
+
+#cloudmapper mother - does not work!! 
+
+#set.seed(1234) # for reproducibility 
+#
+#wordcloud(words = dfmm$feature, freq = dfmm$frequency, min.freq = 1, max.words=20, random.order=FALSE, rot.per=0.35, colors=brewer.pal(8, "Dark2"))
+```
+
+
+```{r}
+which(is.na(data$Year))
+data<- na.omit(data) 
+which(is.na(data$Year))
+  
+  
+```
+
+```{r}
+#try STM
+
+processed <- textProcessor(data$Text1, metadata = data)
+
+out <- prepDocuments(processed$documents, processed$vocab, processed$meta)
+
+docs <- out$documents
+vocab <- out$vocab
+meta <-out$meta
+
+PrevFit <- stm(documents = out$documents, vocab = out$vocab, 
+               K = 20, prevalence =~ Mother  + Newspaper + Year ,
+                      max.em.its = 75, data = out$meta,
+                       init.type = "Spectral")
+
+labelTopics(PrevFit)
+topics<-labelTopics(PrevFit, c(1:20))
+
+```
+topic 2, 4, 5, 6, 7, 9, 10, 12, 13
+```{r}
+#print docs strongly associated with a topic 
+#don't know if we need it 
+thoughts17 <- findThoughts(PrevFit, texts = data$Text,  n = 2, topics = 17)$docs[[1]]#ù
+thoughts17
+
+par(mfrow = c(1, 2),mar = c(.5, .5, 1, .5))
+plotQuote(thoughts17, width = 50, main = "Topic 17")
+#lol article is too long. if we want to show this, we need shorter texts 
+
+
+
+
+```
+
+```{r}
+
+out$meta$Mother <- as.factor(out$meta$Mother)
+prep <- estimateEffect(1:20 ~ Mother + Newspaper + Year, PrevFit,
+meta = out$meta, uncertainty = "Global")
+summary(prep, topics=1)
+
+plot(PrevFit, type = "summary", xlim = c(0, .3))
+
+
+```
+
+Models with other number of topics
+```{r}
+#K = 10
+TenFit <- stm(documents = out$documents, vocab = out$vocab, 
+               K = 10, prevalence =~ Mother  + Newspaper + Year ,
+                      max.em.its = 75, data = out$meta,
+                       init.type = "Spectral")
+
+labelTopics(TenFit)
+topics<-labelTopics(TenFit, c(1:10))
+
+out$meta$Mother <- as.factor(out$meta$Mother)
+prep <- estimateEffect(1:20 ~ Mother + Newspaper + Year, PrevFit,
+meta = out$meta, uncertainty = "Global")
+summary(prep, topics=1)
+
+plot(PrevFit, type = "summary", xlim = c(0, .3))
+```
+
+TenFit topics that make sense: 1, 2, 3, 4 (mothercare is a company - we should probably also kick it), 6, 7, 8, 9
+**Summary Explanation of the LabelTopics Metrics we get**:
+Highest Prob: words within the topic with the highest probability
+FREX: words that are comparatively common for this topic *and exclusive to that topic*, compared to the others
+Lift: divides topic-word distribution by empirical word count probability distribution
+Score: a matrix that contains the log probabilities of seeing a word conditional on the topic
+
+```{r}
+out$meta$Mother <- as.factor(out$meta$Mother)
+prep <- estimateEffect(1:10 ~ Mother + Newspaper + Year, TenFit,
+meta = out$meta, uncertainty = "Global")
+summary(prep, topics=1)
+
+plot(TenFit, type = "summary", xlim = c(0, .3))
+```
+
+```{r}
+#K = 15, tried to run with content covariate but it takes too lomg- francis laptop needs to try if we feel the need
+FifFit <- stm(documents = out$documents, vocab = out$vocab, 
+               K = 15, prevalence =~ Mother + Year + Newspaper,
+                      max.em.its = 75, data = out$meta,
+                       init.type = "Spectral")
+
+labelTopics(FifFit)
+topics<-labelTopics(FifFit, c(1:15))
+
+out$meta$Mother <- as.factor(out$meta$Mother)
+prep <- estimateEffect(1:15 ~ Mother + Newspaper + Year, FifFit,
+meta = out$meta, uncertainty = "Global")
+summary(prep, topics=1)
+
+plot(FifFit, type = "summary", xlim = c(0, .3))
+
+```
+
+
+
+
+```{r}
+#K = 30
+ThiFit <- stm(documents = out$documents, vocab = out$vocab, 
+               K = 30, prevalence =~ Mother  + Newspaper + Year ,
+                      max.em.its = 75, data = out$meta,
+                       init.type = "Spectral")
+
+labelTopics(ThiFit) #hitler gets his own
+topics<-labelTopics(ThiFit, c(1:30))
+
+out$meta$Mother <- as.factor(out$meta$Mother)
+prep <- estimateEffect(1:30 ~ Mother + Newspaper + Year, ThiFit,
+meta = out$meta, uncertainty = "Global")
+summary(prep, topics=1)
+
+plot(ThiFit, type = "summary", xlim = c(0, .3))
+```
+
+```{r}
+#K = 50
+FiftFit <- stm(documents = out$documents, vocab = out$vocab, 
+               K = 50, prevalence =~ Mother  + Newspaper + Year ,
+                      max.em.its = 75, data = out$meta,
+                       init.type = "Spectral")
+
+labelTopics(FiftFit)
+topics<-labelTopics(FiftFit, c(1:50))
+
+out$meta$Mother <- as.factor(out$meta$Mother)
+prep <- estimateEffect(1:50 ~ Mother + Newspaper + Year, ThiFit,
+meta = out$meta, uncertainty = "Global")
+summary(prep, topics=1)
+
+plot(FiftFit, type = "summary", xlim = c(0, .3))
+```
+
+
+
+
+
+Diagnostics to get good K: 
+```{r}
+#code from julia silge, thought it would be cool to give our estimation more credibility
+#but well does not run in an acceptable time for me
+library(furrr)
+
+many_models <- tibble(K = c(10, 20, 30, 40, 50)) %>% 
+  mutate(topic_model = future_map(K, ~stm(documents = out$documents, 
+                                          vocab = out$vocab, 
+                                          K = ., 
+                                          prevalence =~ Mother + Newspaper + s(Year) ,
+                                          max.em.its = 75, 
+                                          data = out$meta,
+                                          init.type = "Spectral")))
+
+
+
+```
+
+Example K = 20; will be adjusted for officially chosen K
+```{r}
+out$meta$Mother <- as.factor(out$meta$Mother)
+prep <- estimateEffect(1:20 ~ Mother + Newspaper + Year, PrevFit,
+meta = out$meta, uncertainty = "Global")#, method = "difference") #does not work yet; but according to the vignette, as soon as we have a model with content = Mother (which is binary), method should be set to difference - this will show with which word the topics are more closely associated!!
+#or i misunderstood lol i think difference can also work without content specified
+summary(prep, topics=1)
+plot(prep, 
+     covariate = "Mother", 
+     topics = c(2, 3, 17),
+     model = PrevFit,
+     method = "difference",
+     cov.value1 = "Mother", cov.value2 = "Father", #i think the error lays here - change preprocessing so mother and father get values??
+     main = "Effect of Mother vs. Father",
+     custom.labels = "Employment", "Royal Family", "Childbirth")
+```
+
+Smooth function topic prevalence:
+```{r}
+plot(prep, "", method = "continuous", topics = 17, model = PrevFit, printlegend = F, xaxt = "n", xlab = "Years (2000-2019)")
+plot(prep, "day", method = "continuous", topics = 7,
++ model = z, printlegend = FALSE, xaxt = "n", xlab = "Time (2008)")
+R> monthseq <- seq(from = as.Date("2008-01-01"),
++ to = as.Date("2008-12-01"), by = "month")
+R> monthnames <- months(monthseq)
+R> axis(1,at = as.numeric(monthseq) - min(as.numeric(monthseq)),
++ labels = monthnames)
+```
+
+
+```{r}
+#plotRemoved(processed$documents, lower.thresh = seq(1, 200, by = 100))
+# out <- prepDocuments(processed$documents, processed$vocab,
+#+ processed$meta, lower.thresh = 15)
+ 
+poliblogSelect <- selectModel(out$documents, out$vocab, K = 20, prevalence =~ rating + s(day), max.em.its = 75, data = out$meta, runs = 20, seed = 8458159)
+
+storage <- searchK(out$documents, out$vocab, K = 7, prevalence =~ Newspaper + s(Year), data = meta)
+
+
+
+#plotRemoved(processed$documents, lower.thresh = seq(1, 200, by = 100))
+# out <- prepDocuments(processed$documents, processed$vocab,
+#+ processed$meta, lower.thresh = 15)
+ 
+poliblogSelect <- selectModel(out$documents, out$vocab, K = 20, prevalence =~ rating + s(day), max.em.its = 75, data = out$meta, runs = 20, seed = 8458159)
+
+storage <- searchK(out$documents, out$vocab, K = 7, prevalence =~ Newspaper + s(Year), data = meta)
+
+
+```
+
