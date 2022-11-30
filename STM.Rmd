@@ -25,7 +25,12 @@ final_data <- final_data %>%
 #add column for mother and father 
 final_data<- final_data %>% 
   mutate(Headline=tolower(Headline)) %>% 
-  mutate(Mother= str_detect(final_data$Headline, "mother"))
+  mutate(Mother= str_detect(final_data$Headline, "mother*"))
+
+#corpus composition
+table(final_data$Mother)
+table(final_data$Newspaper)
+
 
 
 #keep only metadata and texts 
@@ -44,8 +49,22 @@ data<- data %>%
   mutate(Text1= 
            ifelse(Mother=="TRUE", 
                   gsub("mother", "", Text),
-                  gsub("father", "", Text)))
-
+                  gsub("father", "", Text))) %>% 
+  mutate(Text1= gsub("like", "", Text1),
+         gsub("said", "", Text1),
+         gsub("just", "", Text1),
+         gsub("can", "", Text1),
+        gsub("go", "", Text1),
+        gsub("one", "", Text1),
+        gsub("say", "", Text1),
+        gsub("also", "", Text1),
+        gsub("want", "", Text1),
+        gsub("get", "", Text1),
+        gsub("told", "", Text1),
+        gsub("mother", "", Text1),
+        gsub("now", "", Text1))
+        
+      
 data
 
 ```
@@ -103,7 +122,7 @@ freq$feature<- factor(freq$feature, levels=freq$feature)
 a<- ggplot(freq, aes(x=frequency, y=feature, fill=docfreq)) +
  geom_col() + ggtitle("Most frequent words around the word Mother")
 a
- ggsave("dfmm.png", a,  width=2, height=2)
+  ggsave("dfmm.png", a,  width=2, height=2)
  
  #plot for father
  
@@ -145,19 +164,27 @@ vocab <- out$vocab
 meta <-out$meta
 
 PrevFit <- stm(documents = out$documents, vocab = out$vocab, 
-               K = 20, prevalence =~ Mother  + Newspaper + Year ,
+               K = 20, prevalence =~ Mother  + Newspaper + s(Year) ,
                       max.em.its = 75, data = out$meta,
-                       init.type = "Spectral")
+                       init.type = "Spectral", 
+               seed=TRUE)
+
+save(PrevFit, file = "model.RData")
+load("model.RData")
 
 labelTopics(PrevFit)
-topics<-labelTopics(PrevFit, c(1:20))
+labelTopics(PrevFit, c(1:20))
+
+
 
 ```
+
+
 topic 2, 4, 5, 6, 7, 9, 10, 12, 13
 ```{r}
 #print docs strongly associated with a topic 
 #don't know if we need it 
-thoughts17 <- findThoughts(PrevFit, texts = data$Text,  n = 2, topics = 17)$docs[[1]]#ù
+thoughts17 <- findThoughts(PrevFit, texts = data$Text,  n = 2, topics = 17)$docs[[1]]
 thoughts17
 
 par(mfrow = c(1, 2),mar = c(.5, .5, 1, .5))
@@ -176,7 +203,11 @@ prep <- estimateEffect(1:20 ~ Mother + Newspaper + Year, PrevFit,
 meta = out$meta, uncertainty = "Global")
 summary(prep, topics=1)
 
-plot(PrevFit, type = "summary", xlim = c(0, .3))
+plot(PrevFit, type = "summary", xlim = c(0, .3)) 
+
+
+  ggsave("toptopics.png",  height=5, width=5)
+
 
 
 ```
@@ -304,28 +335,89 @@ prep <- estimateEffect(1:20 ~ Mother + Newspaper + Year, PrevFit,
 meta = out$meta, uncertainty = "Global")#, method = "difference") #does not work yet; but according to the vignette, as soon as we have a model with content = Mother (which is binary), method should be set to difference - this will show with which word the topics are more closely associated!!
 #or i misunderstood lol i think difference can also work without content specified
 summary(prep, topics=1)
+
 plot(prep, 
      covariate = "Mother", 
-     topics = c(2, 3, 17),
+     topics = c(2, 5, 6, 9, 10, 14, 17,18),
      model = PrevFit,
      method = "difference",
-     cov.value1 = "Mother", cov.value2 = "Father", #i think the error lays here - change preprocessing so mother and father get values??
-     main = "Effect of Mother vs. Father",
-     custom.labels = "Employment", "Royal Family", "Childbirth")
+     cov.value1 = "TRUE", cov.value2 = "FALSE", #i think the error lays here - change preprocessing so mother and father get values??
+     main = "Prevalence of Topics around Mother and Father ",
+     xlim=c(-0.1, 0.1), labeltype = "custom",
+     custom.labels = c("Employment", "Feelings", "Health and Fertility","Family Law", "Private Finances", "Politics",  "Childbirth", "Child Abuse"),
+    xlab="More associated with Father                             More associated with Mother  ")
 ```
 
 Smooth function topic prevalence:
 ```{r}
-plot(prep, "", method = "continuous", topics = 17, model = PrevFit, printlegend = F, xaxt = "n", xlab = "Years (2000-2019)")
-plot(prep, "day", method = "continuous", topics = 7,
-+ model = z, printlegend = FALSE, xaxt = "n", xlab = "Time (2008)")
-R> monthseq <- seq(from = as.Date("2008-01-01"),
-+ to = as.Date("2008-12-01"), by = "month")
-R> monthnames <- months(monthseq)
-R> axis(1,at = as.numeric(monthseq) - min(as.numeric(monthseq)),
-+ labels = monthnames)
+prep2<- unlist(prep[2])
+
+
+prep <- estimateEffect(1:20 ~ Mother + Newspaper + Year, PrevFit, meta = out$meta, uncertainty = "Global")
+
+prep2<- estimateEffect(c(17) ~ Mother*Year , PrevFit, meta= out$meta, uncertainty="None") 
+
+plot(prep2, covariate = "Year", method = "continuous", model = PrevFit, printlegend = F, moderator="Mother", moderator.value="TRUE", linecol = "blue", ylim=c(0.00, 0.12), main="Childbirth Topic Prevalence") ;  plot(prep2, covariate = "Year", method = "continuous",  model = PrevFit, printlegend = F, moderator="Mother", moderator.value="FALSE", linecol = "red", add = T)
+
+
+
+
+
+
+legend(x="topright", legend=c("Mother", "Father"), lwd=2, col=c("blue", "red"))
+
+
+#printlegend=FALSE
+xaxt = "n"
+before.plot.new()
+
+plot(prep2, covariate = "Year", method = "continuous",  model = PrevFit, printlegend = F, moderator="Mother", moderator.value="FALSE", linecol = "red", add = T)  #printlegend=FALSE,
+
+
+
+legend(0, 0.03, c("Mother", "Father"), lwd=2, col=c("blue", "red"))
+
+yearseq <- seq(from = as.Date("2000"), to = as.Date("2019"), by = "year")
+axis(1, at = as.numeric(yearseq) - min(as.numeric(yearseq)),
+labels = yearseq)
+```
+```{r}
+######Country time period
+ptopics <- out$meta %>% 
+  group_by(out$Newspaper, topic, country) %>% #could do the same but for party or country or both? - what does this actually do?
+  summarise(gamma = sum(gamma)) %>%
+  group_by(period, country) %>%
+  mutate(period_country_share = gamma/sum(gamma)) %>%
+  ungroup() %>%
+  mutate(topic = factor(topic))
+
+##plot
+ggplot(period_country_topics,aes(x=country,y=period_country_share,fill=factor(period)))+
+  geom_bar(stat="identity",position="dodge")+
+  facet_wrap(~topic, scales="fixed") +
+  scale_x_discrete(guide = guide_axis(angle = 90)) +
+  xlab("Country") + ylab("Topic share in time period by country")
+
 ```
 
+```{r}
+out$meta$Newspaper <- as.factor(out$meta$Newspaper)
+prep <- estimateEffect(1:20 ~ Mother + Newspaper + Year, PrevFit,
+meta = out$meta, uncertainty = "Global")#, method = "difference") #does not work yet; but according to the vignette, as soon as we have a model with content = Mother (which is binary), method should be set to difference - this will show with which word the topics are more closely associated!!
+#or i misunderstood lol i think difference can also work without content specified
+summary(prep, topics=1)
+
+plot(prep, 
+     covariate = "Newspaper", 
+     topics = c(2, 3, 5, 6, 9, 10, 11, 14, 17,18),
+     model = PrevFit,
+     method = "difference", 
+     cov.value1 = "The Times", cov.value2 = "The Guardian",
+     main = "Prevalence of Topics in different Nespapers ",
+     xlim=c(-0.1, 0.1), labeltype = "custom",
+     custom.labels = c("Employment", "Royal Family", "Feelings", "Health and Fertility","Family Law", "Private Finances", "Celebrities", "Politics",  "Childbirth", "Child Abuse"),
+    xlab="More  prevalent in Daily Mail              More prevalent in The Guardian")   
+```
 
 ```{r}
 #plotRemoved(processed$documents, lower.thresh = seq(1, 200, by = 100))
