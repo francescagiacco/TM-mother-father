@@ -338,13 +338,13 @@ summary(prep, topics=1)
 
 plot(prep, 
      covariate = "Mother", 
-     topics = c(2, 5, 6, 9, 10, 14, 17,18),
+     topics = c(2, 5, 6,7, 9, 13, 14, 17),
      model = PrevFit,
      method = "difference",
      cov.value1 = "TRUE", cov.value2 = "FALSE", #i think the error lays here - change preprocessing so mother and father get values??
      main = "Prevalence of Topics around Mother and Father ",
      xlim=c(-0.1, 0.1), labeltype = "custom",
-     custom.labels = c("Employment", "Feelings", "Health and Fertility","Family Law", "Private Finances", "Politics",  "Childbirth", "Child Abuse"),
+     custom.labels = c("Employment", "Feelings", "Fertility Research", "Killings/Names",  "Family Law", "Crime/Court" ,"Politics",  "Childbirth"),
     xlab="More associated with Father                             More associated with Mother  ")
 ```
 
@@ -355,9 +355,11 @@ prep2<- unlist(prep[2])
 
 prep <- estimateEffect(1:20 ~ Mother + Newspaper + Year, PrevFit, meta = out$meta, uncertainty = "Global")
 
-prep2<- estimateEffect(c(17) ~ Mother*Year , PrevFit, meta= out$meta, uncertainty="None") 
+prep2<- estimateEffect(c(13) ~ Mother*Year , PrevFit, meta= out$meta, uncertainty="None") 
 
-plot(prep2, covariate = "Year", method = "continuous", model = PrevFit, printlegend = F, moderator="Mother", moderator.value="TRUE", linecol = "blue", ylim=c(0.00, 0.12), main="Childbirth Topic Prevalence") ;  plot(prep2, covariate = "Year", method = "continuous",  model = PrevFit, printlegend = F, moderator="Mother", moderator.value="FALSE", linecol = "red", add = T)
+plot(prep2, covariate = "Year", method = "continuous", model = PrevFit, printlegend = F, moderator="Mother", moderator.value="TRUE", linecol = "blue", ylim=c(0.02, 0.11), main="Crime Topic Prevalence") ;  plot(prep2, covariate = "Year", method = "continuous",  model = PrevFit, printlegend = F, moderator="Mother", moderator.value="FALSE", linecol = "red", add = T)
+
+prep3<- estimateEffect(c(10) ~ Mother*Year*Newspaper , PrevFit, meta= out$meta, uncertainty="None") 
 
 
 
@@ -375,7 +377,7 @@ plot(prep2, covariate = "Year", method = "continuous",  model = PrevFit, printle
 
 
 
-legend(0, 0.03, c("Mother", "Father"), lwd=2, col=c("blue", "red"))
+legend(0.00, 0.03, c("Mother", "Father"), lwd=2, col=c("blue", "red"))
 
 yearseq <- seq(from = as.Date("2000"), to = as.Date("2019"), by = "year")
 axis(1, at = as.numeric(yearseq) - min(as.numeric(yearseq)),
@@ -409,14 +411,18 @@ summary(prep, topics=1)
 
 plot(prep, 
      covariate = "Newspaper", 
-     topics = c(2, 3, 5, 6, 9, 10, 11, 14, 17,18),
+     topics = c(2, 3, 6, 7, 9, 11, 13, 14, 17),
      model = PrevFit,
      method = "difference", 
-     cov.value1 = "The Times", cov.value2 = "The Guardian",
-     main = "Prevalence of Topics in different Nespapers ",
+     cov.value1 = "The Guardian", cov.value2 = "The Times",
+     main = "Prevalence of Topics in different Newspapers ",
      xlim=c(-0.1, 0.1), labeltype = "custom",
-     custom.labels = c("Employment", "Royal Family", "Feelings", "Health and Fertility","Family Law", "Private Finances", "Celebrities", "Politics",  "Childbirth", "Child Abuse"),
-    xlab="More  prevalent in Daily Mail              More prevalent in The Guardian")   
+     custom.labels = c("Employment","Royal Family", "Health and Fertility", "Killings/Names"  , "Family Law", "Celebrities", "Crime/Court", "Politics", "Childbirth"),
+    xlab="More prevalent in The Times                  More prevalent in The Guardian")   
+
+library(stminsights)
+
+get_network(PrevFit)
 ```
 
 ```{r}
